@@ -1,0 +1,144 @@
+# Stage S4: Constraints, Resources & Specification Limits
+
+**Phase:** Phase II — Architecture & Feasibility  
+**Objective:** Define the physical, interconnect, power, and resource limits alongside the operational limits and design margins required for reliable high-rate UART communication.
+
+---
+
+## S4.1 Physical & Interconnect Constraints
+
+### 1. Hardware Physical Constraints
+The system uses the **Sipeed Tang Nano 9K FPGA** (`Gowin GW1NR-9`) and an **NXP LPC1768 microcontroller** development board communicating over UART via jumper-wire connections in a laboratory bench setup:
+* Limited GPIO pins on the Tang Nano 9K must be allocated carefully for UART transmission (`UART_TX`) and reception (`UART_RX`).
+* Suitable UART-compatible TX and RX pins must be selected on both boards.
+* Interconnect wires must be kept short and properly secured to prevent loose contacts.
+* Physical layout must preserve unobstructed access to USB programming and test/measurement interfaces.
+* Prototype uses development boards and jumper wires without requiring a custom PCB or enclosure.
+
+### 2. Interconnection Requirements
+Point-to-point asynchronous full-duplex cross-coupled UART interface:
+
+| FPGA Side (Tang Nano 9K) | LPC1768 Side (MCU) | Purpose |
+| :--- | :--- | :--- |
+| **`UART_TX`** | `UART_RXD` | FPGA transmits serial data to LPC1768 |
+| **`UART_RX`** | `UART_TXD` | LPC1768 transmits serial data to FPGA |
+| **`GND`** | `GND` | Common electrical ground reference |
+
+### 3. Signal Integrity Constraints
+* **Wire Length:** Longer wires add parasitic capacitance and signal distortion at higher baud rates; short connections are required.
+* **Electrical Noise:** External interference can corrupt serial bits, especially at elevated baud rates.
+* **Loose Connections:** Improper mechanical contact causes intermittent communication dropouts.
+* **Ground Reference:** Common `GND` is mandatory for valid logic-level interpretation.
+* **Voltage Compatibility:** Logic voltage levels (`3.3V`) on both boards must be verified prior to wiring.
+
+### 4. Interconnection Constraints & Mitigation
+
+| Constraint | Possible Effect | Mitigation |
+| :--- | :--- | :--- |
+| **Limited GPIO pins** | Restricts pin allocation | Select suitable UART-compatible pins |
+| **Long jumper wires** | Signal distortion | Keep connections short |
+| **Loose connections** | Intermittent data transfer | Ensure secure connections |
+| **Electrical noise** | Data corruption | Maintain proper wiring layout |
+| **Ground mismatch** | Incorrect signal interpretation | Connect common `GND` |
+| **Voltage incompatibility** | Communication failure or hardware damage | Verify electrical specifications before connection |
+
+---
+
+## S4.2 Power, Hardware & Resource Requirements
+
+### 1. Hardware Components
+
+| Component | Purpose |
+| :--- | :--- |
+| **Sipeed Tang Nano 9K FPGA** | Implements UART transmitter and planned receiver logic |
+| **Gowin GW1NR-9 FPGA** | Executes programmed digital logic operations |
+| **LPC1768 Microcontroller** | Receives data from FPGA and supports reverse communication |
+| **USB Cables** | Board power and programming |
+| **Jumper Wires** | Establish `UART_TX`, `UART_RX`, and `GND` connections |
+| **Common Ground** | Provides common electrical reference |
+| **PC / Laptop** | Development, programming, simulation, and testing |
+
+### 2. Power Supply Requirements
+* Tang Nano 9K is powered via its USB interface; LPC1768 is powered via a regulated supply matching board specifications.
+* Both boards must operate strictly within specified voltage limits with a shared common ground.
+* Stable, low-noise power delivery is required to prevent unexpected resets or timing jitter during high-speed testing.
+
+### 3. FPGA Hardware Resources (`Gowin GW1NR-9`)
+
+| Resource | Application |
+| :--- | :--- |
+| **Logic Elements (LUTs)** | Implement UART control FSM and data-processing logic |
+| **Flip-Flops (FFs)** | Store shift-register data and maintain TX/RX states |
+| **GPIO Pins** | Interface with `UART_TX`, `UART_RX`, and status LEDs |
+| **Clock Resources** | Distribute `27 MHz` onboard reference clock |
+| **Internal Memory (BSRAM/SSRAM)** | Buffer frames if required during high-rate bursts |
+
+### 4. LPC1768 Hardware Resources
+* Hardware UART peripheral for receiving FPGA frames and transmitting reverse-path test frames.
+* Dedicated UART GPIO pins and peripheral clock divisor configuration for target baud rates.
+* Internal SRAM and CPU resources for storing received bytes, verifying test vectors, and maintaining error counters.
+
+### 5. Software & Development Toolchain
+
+| Software / Tool | Purpose |
+| :--- | :--- |
+| **Gowin EDA** | FPGA synthesis, place-and-route, and bitstream generation |
+| **Verilog HDL** | RTL description of UART digital logic |
+| **Icarus Verilog** | Functional RTL simulation |
+| **GTKWave** | Simulation waveform (`.vcd`) analysis |
+| **MSYS2 UCRT64** | Build and command-line utility environment |
+| **LPC1768 Development Tools** | Microcontroller firmware compilation and UART configuration |
+
+### 6. Resource Utilisation & Constraints
+* Monitor FPGA LUT/FF utilisation as receiver and error-verification modules are integrated.
+* Ensure GPIO pin constraints (`.cst`) map cleanly to UART-capable pins without conflicts.
+* Balance LPC1768 processing overhead during continuous high-baud-rate verification and error counting.
+
+---
+
+## S4.3 Operational Limits & Design-Margin Requirements
+
+### 1. Clock & Baseline Timing Constraints (`19,200 bps`, `8-N-1`)
+
+| Parameter | Value |
+| :--- | :--- |
+| **FPGA Clock Frequency** | `27 MHz` |
+| **FPGA Clock Period** | `37.04 ns` |
+| **Initial Baud Rate** | `19,200 bps` |
+| **UART Bit Duration** | `52.08 µs` |
+| **Data Bits** | `8` |
+| **Start Bits** | `1` |
+| **Stop Bits** | `1` |
+| **Total Frame Length** | `10 bits` |
+| **Frame Duration** | `520.83 µs` |
+| **Ideal Clock Cycles per Bit** | `1,406.25` |
+
+### 2. Baud-Rate & Communication Limits
+* The `27 MHz` FPGA clock determines discrete timing resolution; integer clock division introduces baud-rate quantisation error at higher speeds.
+* Differences between FPGA and LPC1768 baud-rate generators shift receiver sampling instants across the 10-bit frame.
+* Higher baud rates shrink bit duration and require deterministic inter-frame control during continuous transfers.
+* Maximum reliable operating baud rate is bounded by timing accuracy, receiver sampling alignment, and physical interconnect signal quality.
+
+### 3. Voltage, Timing Mismatch & Error Constraints
+* Both UART interfaces must stay within `3.3V` logic limits with common `GND` and stable supply rails.
+* Asynchronous timing mismatch or noise can cause:
+  * Incorrectly sampled data bits
+  * Framing errors (invalid stop bit)
+  * Missing or corrupted bytes during continuous bursts
+
+### 4. Design-Margin Requirements
+* Maintain accurate clock division from the `27 MHz` oscillator and match baud-rate settings on both FPGA and LPC1768.
+* Use short, secure jumper wires with common grounding and verified electrical compatibility.
+* Provide adequate mid-bit sampling margin in the receiver FSM and step baud rates gradually (`9,600` $\rightarrow$ `921,600 bps`) while logging errors.
+
+### 5. Operational Limits & Mitigation
+
+| Operational Constraint | Possible Effect | Mitigation |
+| :--- | :--- | :--- |
+| **Fixed FPGA clock (`27 MHz`)** | Limits baud-rate timing resolution | Use parameterised clock-divider logic |
+| **Baud-rate mismatch** | Incorrect data sampling | Configure matching baud rates on both ends |
+| **High communication speed** | Increased timing sensitivity | Perform gradual step-by-step baud-rate testing |
+| **Signal noise** | Corrupted data bits | Maintain short, clean wiring layout |
+| **Voltage mismatch** | Improper signal interpretation | Verify `3.3V` electrical compatibility prior to connection |
+| **Continuous transmission** | Possible byte/buffer loss | Implement deterministic frame handshaking |
+| **Receiver sampling errors** | Incorrect received bytes | Use centered mid-bit sampling timing |
